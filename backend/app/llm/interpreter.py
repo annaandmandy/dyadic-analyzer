@@ -17,33 +17,9 @@ STRICT RULES:
 - Frame all outputs as "perceived visual interaction patterns".
 - Be precise, objective, and grounded in the provided data."""
 
-VOICE_THOUGHT_PROMPT = """Look at this image of two people and read the interaction analysis below.
-
-Interaction analysis:
-{scene_explanation}
-
-Key signals:
-- Person 0 dominance: {dom0:.2f}, Person 1 dominance: {dom1:.2f}
-- Engagement: {engagement:.2f}, Closeness: {closeness:.2f}, Mutual gaze: {mutual_gaze}
-- Person 0 smile: {smile0:.2f}, Person 1 smile: {smile1:.2f}
-
-Based on what you can actually SEE in the image (the setting, what they're doing, their body language, \
-the context) and the signals above, write a brief first-person internal thought for each person — \
-what they might be thinking or feeling in this specific moment. Make it feel real and specific to \
-this scene, not generic. 1-2 sentences each.
-
-Also assign a tone for each: "confident" (assertive, self-assured), "warm" (open, engaged, friendly), \
-or "reserved" (withdrawn, cautious, distant).
-
-Respond in JSON:
-{{
-  "person_0": {{"thought": "...", "tone": "confident|warm|reserved"}},
-  "person_1": {{"thought": "...", "tone": "confident|warm|reserved"}}
-}}"""
-
-INTERPRETATION_TEMPLATE = """Interpret the following quantified visual interaction metrics
-for two people detected in a single image. Do not assume relationship types. Focus only
-on observable behavioral patterns. Avoid psychological diagnosis.
+INTERPRETATION_TEMPLATE = """Look at this image and interpret the quantified visual interaction
+metrics below. Do not assume relationship types. Focus on observable behavioral patterns and
+what you can actually SEE (poses, body language, setting, gestures, spatial arrangement).
 
 ## Person 0 Features:
 - Position (2D): {p0_center}
@@ -75,19 +51,59 @@ on observable behavioral patterns. Avoid psychological diagnosis.
 - Engagement score: {engagement:.3f}
 - Balance index: {balance:.3f}
 
-Respond in JSON with exactly two fields:
-- "explanation": A 3-5 sentence analysis of the perceived visual interaction patterns.
+Respond in JSON with exactly three fields:
+- "scene_context": 1-2 sentences describing the visible setting, what they appear to be doing, \
+and their body language / pose (e.g. standing, seated, gesturing, leaning). Be specific to this image.
+- "explanation": 3-5 sentences analyzing the perceived visual interaction patterns, \
+combining what you see with the metrics above.
 - "one_line_summary": A single sentence summary of the perceived interaction."""
+
+VOICE_THOUGHT_PROMPT = """Look at this image of two people and read the interaction analysis below.
+
+Interaction analysis:
+{scene_explanation}
+
+Key signals:
+- Person 0 dominance: {dom0:.2f}, Person 1 dominance: {dom1:.2f}
+- Engagement: {engagement:.2f}, Closeness: {closeness:.2f}, Mutual gaze: {mutual_gaze}
+- Person 0 smile: {smile0:.2f}, Person 1 smile: {smile1:.2f}
+
+For each person:
+1. Write a brief first-person internal thought (1-2 sentences) specific to this scene — \
+what they might be thinking/feeling right now. Make it feel real, not generic.
+2. Assign a tone: "confident" (assertive, self-assured), "warm" (open, engaged), \
+or "reserved" (withdrawn, cautious).
+3. Estimate their perceived gender from the image: "male" or "female".
+4. Estimate their vocal energy level based on their apparent emotional state: \
+"high" (animated, intense), "medium" (calm but engaged), or "low" (quiet, subdued).
+
+Respond in JSON:
+{{
+  "person_0": {{"thought": "...", "tone": "confident|warm|reserved", \
+"perceived_gender": "male|female", "energy": "high|medium|low"}},
+  "person_1": {{"thought": "...", "tone": "confident|warm|reserved", \
+"perceived_gender": "male|female", "energy": "high|medium|low"}}
+}}"""
 
 
 class LLMInterpreter:
     def __init__(self):
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
 
+    def _image_content(self, image_bytes: bytes, image_ext: str) -> dict:
+        image_b64 = base64.b64encode(image_bytes).decode()
+        ext = image_ext.lower().replace("jpg", "jpeg")
+        return {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/{ext};base64,{image_b64}"},
+        }
+
     async def interpret(
         self,
         persons: list[PersonFeatures],
         pairwise: PairwiseFeatures,
+        image_bytes: bytes | None = None,
+        image_ext: str = "jpeg",
     ) -> InteractionSummary:
         p0, p1 = persons[0], persons[1]
 
@@ -119,22 +135,29 @@ class LLMInterpreter:
             balance=pairwise.balance_index,
         )
 
+        # Build message content — include image if available
+        if image_bytes:
+            user_content = [self._image_content(image_bytes, image_ext), {"type": "text", "text": prompt}]
+        else:
+            user_content = prompt
+
         try:
             response = await self.client.chat.completions.create(
                 model=settings.openai_model,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": user_content},
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.3,
-                max_tokens=500,
+                max_tokens=600,
             )
 
             content = response.choices[0].message.content
             parsed = json.loads(content)
 
             return InteractionSummary(
+                scene_context=parsed.get("scene_context", ""),
                 explanation=parsed.get("explanation", "Analysis could not be generated."),
                 one_line_summary=parsed.get("one_line_summary", "No summary available."),
             )
@@ -152,11 +175,7 @@ class LLMInterpreter:
         pairwise: PairwiseFeatures,
         scene_explanation: str,
     ) -> list[dict]:
-        """Generate scene-aware first-person thoughts for each person using GPT-4o vision."""
-        image_b64 = base64.b64encode(image_bytes).decode()
-        ext = image_ext.lower().replace("jpg", "jpeg")
-        media_type = f"image/{ext}"
-
+        """Generate scene-aware thoughts + voice characteristics per person using GPT-4o vision."""
         prompt = VOICE_THOUGHT_PROMPT.format(
             scene_explanation=scene_explanation,
             dom0=pairwise.dominance_scores[0],
@@ -175,17 +194,14 @@ class LLMInterpreter:
                     {
                         "role": "user",
                         "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:{media_type};base64,{image_b64}"},
-                            },
+                            self._image_content(image_bytes, image_ext),
                             {"type": "text", "text": prompt},
                         ],
                     }
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.7,
-                max_tokens=300,
+                max_tokens=400,
             )
             parsed = json.loads(response.choices[0].message.content)
             return [
@@ -193,11 +209,15 @@ class LLMInterpreter:
                     "person_id": 0,
                     "thought_text": parsed["person_0"]["thought"],
                     "tone": parsed["person_0"].get("tone", "warm"),
+                    "perceived_gender": parsed["person_0"].get("perceived_gender", "neutral"),
+                    "energy": parsed["person_0"].get("energy", "medium"),
                 },
                 {
                     "person_id": 1,
                     "thought_text": parsed["person_1"]["thought"],
                     "tone": parsed["person_1"].get("tone", "warm"),
+                    "perceived_gender": parsed["person_1"].get("perceived_gender", "neutral"),
+                    "energy": parsed["person_1"].get("energy", "medium"),
                 },
             ]
         except Exception:

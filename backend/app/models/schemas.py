@@ -34,6 +34,7 @@ class PairwiseFeatures(BaseModel):
 
 
 class InteractionSummary(BaseModel):
+    scene_context: str = ""
     explanation: str
     one_line_summary: str
 

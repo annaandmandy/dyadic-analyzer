@@ -17,9 +17,14 @@ class Settings(BaseSettings):
 
     # ElevenLabs TTS
     elevenlabs_api_key: Optional[str] = None
-    elevenlabs_voice_confident: str = "pNInz6obpgDQGcFmaJgB"  # Adam
-    elevenlabs_voice_warm: str = "EXAVITQu4vr4xnSDxMaL"      # Bella
-    elevenlabs_voice_reserved: str = "VR6AewLTigWG4xSOukaG"   # Arnold
+    # Male voices: energetic / neutral / calm
+    elevenlabs_voice_male_high: str = "TxGEqnHWrfWFTfGW9XjX"    # Josh
+    elevenlabs_voice_male_medium: str = "pNInz6obpgDQGcFmaJgB"   # Adam
+    elevenlabs_voice_male_low: str = "VR6AewLTigWG4xSOukaG"      # Arnold
+    # Female voices: energetic / neutral / calm
+    elevenlabs_voice_female_high: str = "AZnzlk1XvdvUeBnXmlld"   # Domi
+    elevenlabs_voice_female_medium: str = "EXAVITQu4vr4xnSDxMaL"  # Bella
+    elevenlabs_voice_female_low: str = "21m00Tcm4TlvDq8ikWAM"    # Rachel
 
     # CV Pipeline
     face_detection_backend: str = "mediapipe"  # "retinaface" or "mediapipe"

@@ -56,7 +56,28 @@ export default function ResultDashboard({ result }: Props) {
 
   return (
     <div>
-      {/* Summary */}
+      {/* Scene context — what GPT-4o sees in the image */}
+      {interpretation.scene_context && (
+        <div
+          style={{
+            background: "var(--bg-card)",
+            borderRadius: "var(--radius)",
+            padding: "1.25rem",
+            border: "1px solid var(--border)",
+            marginBottom: "1rem",
+            borderLeft: "3px solid var(--accent)",
+          }}
+        >
+          <h3 style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Scene
+          </h3>
+          <p style={{ fontSize: "0.95rem", lineHeight: 1.7, margin: 0 }}>
+            {interpretation.scene_context}
+          </p>
+        </div>
+      )}
+
+      {/* Interaction summary */}
       <div
         style={{
           background: "var(--bg-card)",

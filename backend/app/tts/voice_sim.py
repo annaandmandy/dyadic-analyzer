@@ -34,9 +34,8 @@ class VoiceSimulator:
     def generate_thought(
         self, person: PersonFeatures, pairwise: PairwiseFeatures, person_idx: int
     ) -> str:
-        """Generate a short internal thought sentence based on interaction scores."""
+        """Rule-based fallback thought when LLM is unavailable."""
         tone = self.determine_tone(person, pairwise, person_idx)
-        dom = pairwise.dominance_scores[person_idx]
         engagement = pairwise.engagement_score
 
         if tone == "confident":
@@ -52,33 +51,49 @@ class VoiceSimulator:
                 return "I'm watching, though I'm holding back a bit."
             return "I'm present but keeping a quiet distance for now."
 
-    def _select_voice_id(self, tone: str) -> str:
-        if tone == "confident":
-            return settings.elevenlabs_voice_confident
-        elif tone == "warm":
-            return settings.elevenlabs_voice_warm
+    def _select_voice_id(
+        self, tone: str, perceived_gender: str = "neutral", energy: str = "medium"
+    ) -> str:
+        """Select ElevenLabs voice based on perceived gender and energy level."""
+        gender = perceived_gender.lower()
+        if gender == "male":
+            return {
+                "high": settings.elevenlabs_voice_male_high,
+                "medium": settings.elevenlabs_voice_male_medium,
+                "low": settings.elevenlabs_voice_male_low,
+            }.get(energy, settings.elevenlabs_voice_male_medium)
+        elif gender == "female":
+            return {
+                "high": settings.elevenlabs_voice_female_high,
+                "medium": settings.elevenlabs_voice_female_medium,
+                "low": settings.elevenlabs_voice_female_low,
+            }.get(energy, settings.elevenlabs_voice_female_medium)
         else:
-            return settings.elevenlabs_voice_reserved
+            # Tone-based fallback when gender is unknown
+            return {
+                "confident": settings.elevenlabs_voice_male_medium,
+                "warm": settings.elevenlabs_voice_female_medium,
+                "reserved": settings.elevenlabs_voice_male_low,
+            }.get(tone, settings.elevenlabs_voice_female_medium)
 
     async def synthesize(
-        self, text: str, tone: str, person_idx: int
+        self,
+        text: str,
+        tone: str,
+        person_idx: int,
+        perceived_gender: str = "neutral",
+        energy: str = "medium",
     ) -> str | None:
         """Call ElevenLabs API and save audio. Returns relative audio path."""
         if not self.api_key:
             return None
 
-        voice_id = self._select_voice_id(tone)
+        voice_id = self._select_voice_id(tone, perceived_gender, energy)
         url = f"{ELEVENLABS_API_URL}/{voice_id}"
 
-        # Adjust voice settings based on tone
-        stability = 0.5
-        similarity_boost = 0.75
-        if tone == "confident":
-            stability = 0.4
-            similarity_boost = 0.8
-        elif tone == "reserved":
-            stability = 0.7
-            similarity_boost = 0.6
+        # Voice stability: higher energy = more expressive (lower stability)
+        stability = {"high": 0.35, "medium": 0.5, "low": 0.7}.get(energy, 0.5)
+        similarity_boost = {"high": 0.85, "medium": 0.75, "low": 0.6}.get(energy, 0.75)
 
         headers = {
             "xi-api-key": self.api_key,
@@ -115,21 +130,26 @@ class VoiceSimulator:
         pregenerated_thoughts: list[dict] | None = None,
         generate_audio: bool = True,
     ) -> list[VoiceThought]:
-        """Generate thoughts and audio for both persons.
-
-        If pregenerated_thoughts is provided (from LLM vision), those are used
-        instead of the rule-based fallback.
-        """
+        """Generate thoughts and audio for both persons."""
         results = []
         for i, person in enumerate(persons):
             if pregenerated_thoughts and i < len(pregenerated_thoughts):
-                tone = pregenerated_thoughts[i]["tone"]
-                thought = pregenerated_thoughts[i]["thought_text"]
+                t = pregenerated_thoughts[i]
+                tone = t["tone"]
+                thought = t["thought_text"]
+                perceived_gender = t.get("perceived_gender", "neutral")
+                energy = t.get("energy", "medium")
             else:
                 tone = self.determine_tone(person, pairwise, i)
                 thought = self.generate_thought(person, pairwise, i)
+                perceived_gender = "neutral"
+                energy = "medium"
 
-            audio_url = await self.synthesize(thought, tone, i) if generate_audio else None
+            audio_url = (
+                await self.synthesize(thought, tone, i, perceived_gender, energy)
+                if generate_audio
+                else None
+            )
 
             results.append(VoiceThought(
                 person_id=i,

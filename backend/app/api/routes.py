@@ -107,10 +107,10 @@ async def analyze_image(
     scoring = ScoringEngine()
     pairwise = scoring.compute(cv_output, ablation)
 
-    # LLM interpretation
+    # LLM interpretation (vision-based when image available)
     interpreter = get_llm_interpreter()
     if use_llm and settings.openai_api_key:
-        interpretation = await interpreter.interpret(cv_output.persons, pairwise)
+        interpretation = await interpreter.interpret(cv_output.persons, pairwise, contents, ext)
     else:
         interpretation = interpreter.interpret_sync_fallback(cv_output.persons, pairwise)
 

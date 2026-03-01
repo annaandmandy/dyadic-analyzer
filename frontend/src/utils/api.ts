@@ -41,6 +41,7 @@ export interface AnalysisResult {
   persons: PersonFeatures[];
   pairwise: PairwiseFeatures;
   interpretation: {
+    scene_context: string;
     explanation: string;
     one_line_summary: string;
   };
