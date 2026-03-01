@@ -58,24 +58,40 @@ and their body language / pose (e.g. standing, seated, gesturing, leaning). Be s
 combining what you see with the metrics above.
 - "one_line_summary": A single sentence summary of the perceived interaction."""
 
-VOICE_THOUGHT_PROMPT = """Look at this image of two people and read the interaction analysis below.
+VOICE_THOUGHT_PROMPT = """Look at this image of two people. Here is what we know about their interaction:
 
-Interaction analysis:
-{scene_explanation}
+IMPORTANT — Person identification (do not mix these up):
+- Person 0 is the person on the {side_0} side of the image (horizontal position ~{x0:.0%} from left)
+- Person 1 is the person on the {side_1} side of the image (horizontal position ~{x1:.0%} from left)
 
-Key signals:
+Scene: {scene_explanation}
+
+Gaze directions:
+- Person 0 looking at Person 1: {gaze_0_to_1}
+- Person 1 looking at Person 0: {gaze_1_to_0}
+- Mutual gaze (both looking at each other): {mutual_gaze}
+
+Other signals:
 - Person 0 dominance: {dom0:.2f}, Person 1 dominance: {dom1:.2f}
-- Engagement: {engagement:.2f}, Closeness: {closeness:.2f}, Mutual gaze: {mutual_gaze}
+- Engagement: {engagement:.2f}, Closeness: {closeness:.2f}
 - Person 0 smile: {smile0:.2f}, Person 1 smile: {smile1:.2f}
 
-For each person:
-1. Write a brief first-person internal thought (1-2 sentences) specific to this scene — \
-what they might be thinking/feeling right now. Make it feel real, not generic.
-2. Assign a tone: "confident" (assertive, self-assured), "warm" (open, engaged), \
-or "reserved" (withdrawn, cautious).
-3. Estimate their perceived gender from the image: "male" or "female".
-4. Estimate their vocal energy level based on their apparent emotional state: \
-"high" (animated, intense), "medium" (calm but engaged), or "low" (quiet, subdued).
+Write an inner monologue (1-2 sentences) for each person — what they are privately thinking \
+RIGHT NOW in this moment. Follow these rules strictly:
+
+- If a person IS gazing at the other: their thought should be ABOUT the other person \
+(noticing them, reacting to them, feeling something toward them — e.g. "She looks so focused, \
+I wonder what she's thinking about me.")
+- If a person is NOT gazing at the other (e.g. looking at camera or away): their thought \
+reflects their own state or situation, not directly about the other person.
+- If both are gazing at each other: the thoughts should feel like two sides of the same \
+moment — reactive to each other, like unspoken halves of a conversation.
+- Be specific to what you see in the image. Do NOT use generic phrases.
+
+Also for each person:
+- Tone: "confident" (assertive), "warm" (open, engaged), or "reserved" (withdrawn, cautious)
+- Perceived gender from the image: "male" or "female"
+- Vocal energy: "high" (animated/intense), "medium" (calm but engaged), "low" (quiet/subdued)
 
 Respond in JSON:
 {{
@@ -176,13 +192,23 @@ class LLMInterpreter:
         scene_explanation: str,
     ) -> list[dict]:
         """Generate scene-aware thoughts + voice characteristics per person using GPT-4o vision."""
+        x0, x1 = persons[0].center_2d[0], persons[1].center_2d[0]
+        side_0 = "left" if x0 < 0.5 else "right"
+        side_1 = "right" if x0 < 0.5 else "left"
+
         prompt = VOICE_THOUGHT_PROMPT.format(
+            side_0=side_0,
+            x0=x0,
+            side_1=side_1,
+            x1=x1,
             scene_explanation=scene_explanation,
+            gaze_0_to_1=pairwise.gaze_intersects[0],
+            gaze_1_to_0=pairwise.gaze_intersects[1],
+            mutual_gaze=pairwise.mutual_gaze,
             dom0=pairwise.dominance_scores[0],
             dom1=pairwise.dominance_scores[1],
             engagement=pairwise.engagement_score,
             closeness=pairwise.closeness_score,
-            mutual_gaze=pairwise.mutual_gaze,
             smile0=persons[0].smile_probability,
             smile1=persons[1].smile_probability,
         )
