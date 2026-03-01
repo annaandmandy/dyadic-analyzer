@@ -42,8 +42,8 @@ export default function App() {
         }}
         onLoading={setLoading}
         onError={(e) => {
-          setError(e);
-          setResult(null);
+          setError(e || null);
+          if (e) setResult(null);
         }}
       />
 

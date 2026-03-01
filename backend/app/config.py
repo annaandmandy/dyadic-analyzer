@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     midas_model_type: str = "MiDaS_small"
     pose_model_complexity: int = 1
     yolo_model: str = "yolov8m.pt"
-    yolo_conf: float = 0.15
+    yolo_conf: float = 0.2   # raised from 0.15 to suppress weak partial-body detections
+    yolo_iou: float = 0.2    # NMS IoU threshold; lower = more aggressive merging of overlapping boxes
     yolo_imgsz: int = 1280
 
     # Scoring weights (configurable)

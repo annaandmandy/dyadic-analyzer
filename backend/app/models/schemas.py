@@ -91,6 +91,17 @@ class AblationConfig(BaseModel):
     disable_expansion: bool = False
 
 
+class DetectedPerson(BaseModel):
+    person_id: int  # left-to-right index (0 = leftmost)
+    bbox: tuple[float, float, float, float]  # normalized x1, y1, x2, y2
+    confidence: float
+
+
+class GroupDetectionResult(BaseModel):
+    image_id: str
+    persons: list[DetectedPerson]
+
+
 class EvaluationMetrics(BaseModel):
     dominance_spearman_rho: Optional[float] = None
     dominance_spearman_p: Optional[float] = None

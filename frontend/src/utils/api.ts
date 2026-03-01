@@ -1,5 +1,16 @@
 const API_BASE = "/api";
 
+export interface DetectedPerson {
+  person_id: number;
+  bbox: [number, number, number, number]; // normalized x1, y1, x2, y2
+  confidence: number;
+}
+
+export interface GroupDetectionResult {
+  image_id: string;
+  persons: DetectedPerson[];
+}
+
 export interface PersonFeatures {
   person_id: number;
   center_2d: [number, number];
@@ -65,6 +76,23 @@ export interface EvaluationMetrics {
   num_annotations: number;
 }
 
+export async function detectPersons(file: File): Promise<GroupDetectionResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/detect`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Detection failed");
+  }
+
+  return res.json();
+}
+
 export async function analyzeImage(
   file: File,
   options: {
@@ -73,6 +101,8 @@ export async function analyzeImage(
     disableDepth?: boolean;
     disableGaze?: boolean;
     disableExpansion?: boolean;
+    person0?: number;
+    person1?: number;
   } = {}
 ): Promise<AnalysisResult> {
   const formData = new FormData();
@@ -84,6 +114,8 @@ export async function analyzeImage(
   if (options.disableDepth) params.set("disable_depth", "true");
   if (options.disableGaze) params.set("disable_gaze", "true");
   if (options.disableExpansion) params.set("disable_expansion", "true");
+  if (options.person0 !== undefined) params.set("person_0", String(options.person0));
+  if (options.person1 !== undefined) params.set("person_1", String(options.person1));
 
   const res = await fetch(`${API_BASE}/analyze?${params}`, {
     method: "POST",

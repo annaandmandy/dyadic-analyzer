@@ -19,6 +19,7 @@ from app.models.schemas import (
     WeightsConfig,
     AblationConfig,
     EvaluationMetrics,
+    GroupDetectionResult,
 )
 from app.cv.pipeline import CVPipeline
 from app.features.scoring import ScoringEngine
@@ -56,6 +57,42 @@ def get_voice_simulator() -> VoiceSimulator:
     return _voice_simulator
 
 
+@router.post("/detect", response_model=GroupDetectionResult)
+async def detect_persons(file: UploadFile = File(...)):
+    """Detect all persons in an image using YOLO. Returns bounding boxes for person selection."""
+    if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(400, "Only JPEG, PNG, and WebP images are supported.")
+
+    contents = await file.read()
+    if len(contents) > settings.max_upload_size_mb * 1024 * 1024:
+        raise HTTPException(400, f"File too large. Max {settings.max_upload_size_mb}MB.")
+
+    nparr = np.frombuffer(contents, np.uint8)
+    image_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if image_bgr is None:
+        raise HTTPException(400, "Could not decode image.")
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+    # Save upload so the frontend can display it
+    os.makedirs(settings.upload_dir, exist_ok=True)
+    image_id = uuid.uuid4().hex[:12]
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename else "jpg"
+    save_path = os.path.join(settings.upload_dir, f"{image_id}.{ext}")
+    with open(save_path, "wb") as f:
+        f.write(contents)
+
+    pipeline = get_cv_pipeline()
+    persons = pipeline.detect_only(image_rgb)
+
+    if len(persons) < 2:
+        raise HTTPException(
+            422,
+            f"Need at least 2 people in the image. Detected {len(persons)}.",
+        )
+
+    return GroupDetectionResult(image_id=image_id, persons=persons)
+
+
 @router.post("/analyze", response_model=AnalysisResult)
 async def analyze_image(
     file: UploadFile = File(...),
@@ -64,6 +101,8 @@ async def analyze_image(
     disable_depth: bool = Query(False),
     disable_gaze: bool = Query(False),
     disable_expansion: bool = Query(False),
+    person_0: int = Query(0, description="Index of first person to analyze (left-to-right)"),
+    person_1: int = Query(1, description="Index of second person to analyze (left-to-right)"),
     db: Session = Depends(get_db),
 ):
     """Analyze a dyadic image and return interaction signals."""
@@ -99,7 +138,7 @@ async def analyze_image(
 
     try:
         pipeline = get_cv_pipeline()
-        cv_output = pipeline.process(image_rgb, ablation)
+        cv_output = pipeline.process(image_rgb, ablation, person_indices=(person_0, person_1))
     except ValueError as e:
         raise HTTPException(422, str(e))
 

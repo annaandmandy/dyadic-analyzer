@@ -9,7 +9,7 @@ from app.cv.face_detection import FaceDetector, FaceDetection
 from app.cv.pose_estimation import PoseEstimator, PoseResult
 from app.cv.depth_estimation import DepthEstimator
 from app.cv.gaze_estimation import GazeEstimator
-from app.models.schemas import PersonFeatures, AblationConfig
+from app.models.schemas import PersonFeatures, AblationConfig, DetectedPerson
 
 
 @dataclass
@@ -30,21 +30,39 @@ class CVPipeline:
         self.depth_estimator = DepthEstimator()
         self.gaze_estimator = GazeEstimator()
 
+    def detect_only(self, image_rgb: np.ndarray) -> list[DetectedPerson]:
+        """Run YOLO detection only (no full CV pipeline). Returns all detected persons."""
+        detections = self.person_detector.detect(image_rgb, max_persons=None)
+        return [
+            DetectedPerson(person_id=i, bbox=d.bbox, confidence=d.confidence)
+            for i, d in enumerate(detections)
+        ]
+
     def process(
-        self, image_rgb: np.ndarray, ablation: AblationConfig | None = None
+        self,
+        image_rgb: np.ndarray,
+        ablation: AblationConfig | None = None,
+        person_indices: tuple[int, int] = (0, 1),
     ) -> CVPipelineOutput:
-        """Run the full CV pipeline on an image with exactly 2 people."""
+        """Run the full CV pipeline on an image for the selected pair of people."""
         if ablation is None:
             ablation = AblationConfig()
 
         h, w = image_rgb.shape[:2]
 
-        # 0. Person detection (YOLO) — robust at any scale/distance
-        persons_yolo = self.person_detector.detect(image_rgb)
-        if len(persons_yolo) < 2:
+        # 0. Person detection (YOLO) — detect all, then filter to selected indices
+        all_persons_yolo = self.person_detector.detect(image_rgb, max_persons=None)
+        if len(all_persons_yolo) < 2:
             raise ValueError(
-                f"Expected 2 people, YOLO detected {len(persons_yolo)}. "
-                "Please provide an image with exactly two people visible."
+                f"Expected at least 2 people, YOLO detected {len(all_persons_yolo)}. "
+                "Please provide an image with at least two people visible."
+            )
+        try:
+            persons_yolo = [all_persons_yolo[i] for i in person_indices]
+        except IndexError:
+            raise ValueError(
+                f"Selected person indices {person_indices} out of range "
+                f"({len(all_persons_yolo)} people detected)."
             )
 
         # 1. Face detection — run per person crop for reliability on small faces
