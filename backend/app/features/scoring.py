@@ -72,6 +72,9 @@ class ScoringEngine:
         # Balance index
         balance = self._balance_index(dominance_gap, gaze_asym)
 
+        # Physical contact score from wrist proximity
+        contact_score = self._contact_score(cv_output.wrist_proximity)
+
         return PairwiseFeatures(
             distance_3d=distance_3d,
             closeness_score=closeness,
@@ -84,6 +87,7 @@ class ScoringEngine:
             dominance_gap=dominance_gap,
             engagement_score=engagement,
             balance_index=balance,
+            contact_score=contact_score,
         )
 
     def _compute_3d_distance(
@@ -157,6 +161,15 @@ class ScoringEngine:
             + self.w.engagement_w_closeness * closeness
             + self.w.engagement_w_emotion_sim * emotion_sim
         )
+
+    @staticmethod
+    def _contact_score(wrist_proximity: float) -> float:
+        """Convert wrist proximity to a contact likelihood score.
+
+        Uses exponential decay: proximity 0 → score 1.0, proximity 0.1 → ~0.14
+        The threshold ~0.08 in normalized coords covers typical hand-holding distance.
+        """
+        return float(np.exp(-wrist_proximity * 25))
 
     def _balance_index(self, dominance_gap: float, gaze_asymmetry: float) -> float:
         """1 - weighted(dominance_gap + gaze_asymmetry)."""

@@ -21,6 +21,10 @@ INTERPRETATION_TEMPLATE = """Look at this image and interpret the quantified vis
 metrics below. Do not assume relationship types. Focus on observable behavioral patterns and
 what you can actually SEE (poses, body language, setting, gestures, spatial arrangement).
 
+PRIORITY: First check for physical contact — are they holding hands, hugging, linking arms, \
+touching, or making any body contact? If YES, this is the PRIMARY signal and MUST be described \
+explicitly and prominently in your output. Do not bury it or omit it.
+
 ## Person 0 Features:
 - Position (2D): {p0_center}
 - Estimated depth: {p0_depth:.3f}
@@ -50,12 +54,13 @@ what you can actually SEE (poses, body language, setting, gestures, spatial arra
 - Dominance gap: {dom_gap:.3f}
 - Engagement score: {engagement:.3f}
 - Balance index: {balance:.3f}
+- Physical contact score: {contact_score:.3f} (0 = no contact, 1 = wrists very close / likely touching)
 
 Respond in JSON with exactly three fields:
 - "scene_context": 1-2 sentences describing the visible setting, what they appear to be doing, \
-and their body language / pose (e.g. standing, seated, gesturing, leaning). Be specific to this image.
+and their body language / pose — including any physical contact or touch you can see. Be specific to this image.
 - "explanation": 3-5 sentences analyzing the perceived visual interaction patterns, \
-combining what you see with the metrics above.
+combining what you see with the metrics above. If physical contact is present, lead with it.
 - "one_line_summary": A single sentence summary of the perceived interaction."""
 
 VOICE_THOUGHT_PROMPT = """Look at this image of two people. Here is what we know about their interaction:
@@ -75,10 +80,15 @@ Other signals:
 - Person 0 dominance: {dom0:.2f}, Person 1 dominance: {dom1:.2f}
 - Engagement: {engagement:.2f}, Closeness: {closeness:.2f}
 - Person 0 smile: {smile0:.2f}, Person 1 smile: {smile1:.2f}
+- Physical contact score: {contact_score:.2f} (0 = no contact, 1 = wrists very close / likely touching)
 
 Write an inner monologue (1-2 sentences) for each person — what they are privately thinking \
 RIGHT NOW in this moment. Follow these rules strictly:
 
+- PHYSICAL CONTACT RULE (highest priority): If contact_score > 0.3 OR you can visually see \
+them touching (holding hands, hugging, linked arms, guiding, etc.), the thoughts MUST directly \
+reference the physical connection between them. Do NOT write about balance, weather, clothing, \
+or unrelated internal states when they are touching.
 - If a person IS gazing at the other: their thought should be ABOUT the other person \
 (noticing them, reacting to them, feeling something toward them — e.g. "She looks so focused, \
 I wonder what she's thinking about me.")
@@ -149,6 +159,7 @@ class LLMInterpreter:
             dom_gap=pairwise.dominance_gap,
             engagement=pairwise.engagement_score,
             balance=pairwise.balance_index,
+            contact_score=pairwise.contact_score,
         )
 
         # Build message content — include image if available
@@ -211,6 +222,7 @@ class LLMInterpreter:
             closeness=pairwise.closeness_score,
             smile0=persons[0].smile_probability,
             smile1=persons[1].smile_probability,
+            contact_score=pairwise.contact_score,
         )
 
         try:

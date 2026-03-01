@@ -19,6 +19,7 @@ class CVPipelineOutput:
     gaze_intersects: tuple[bool, bool]
     mutual_gaze: bool
     depth_map: np.ndarray
+    wrist_proximity: float  # min normalized distance between any wrist pair; 0 = touching
 
 
 class CVPipeline:
@@ -106,13 +107,49 @@ class CVPipeline:
                 position_3d=pos_3d,
             ))
 
+        wrist_proximity = self._compute_wrist_proximity(poses)
+
         return CVPipelineOutput(
             persons=persons,
             gaze_directions=gaze_directions,
             gaze_intersects=(a_to_b, b_to_a),
             mutual_gaze=mutual,
             depth_map=depth_map,
+            wrist_proximity=wrist_proximity,
         )
+
+    @staticmethod
+    def _compute_wrist_proximity(poses: list[PoseResult]) -> float:
+        """Compute minimum distance between any wrist pair across two people.
+
+        MediaPipe landmark indices: LEFT_WRIST=15, RIGHT_WRIST=16.
+        Only considers wrists with visibility > 0.3 to avoid default-pose noise.
+        Returns 1.0 if no visible wrists found.
+        """
+        _L_WRIST, _R_WRIST = 15, 16
+        if len(poses) < 2:
+            return 1.0
+
+        def wrist(pose: PoseResult, idx: int):
+            lm = pose.landmarks[idx]
+            return np.array([lm[0], lm[1]]), lm[2]
+
+        p0_lw, p0_lw_v = wrist(poses[0], _L_WRIST)
+        p0_rw, p0_rw_v = wrist(poses[0], _R_WRIST)
+        p1_lw, p1_lw_v = wrist(poses[1], _L_WRIST)
+        p1_rw, p1_rw_v = wrist(poses[1], _R_WRIST)
+
+        min_dist = 1.0
+        for a, a_v, b, b_v in [
+            (p0_lw, p0_lw_v, p1_lw, p1_lw_v),
+            (p0_lw, p0_lw_v, p1_rw, p1_rw_v),
+            (p0_rw, p0_rw_v, p1_lw, p1_lw_v),
+            (p0_rw, p0_rw_v, p1_rw, p1_rw_v),
+        ]:
+            if a_v > 0.3 and b_v > 0.3:
+                min_dist = min(min_dist, float(np.linalg.norm(a - b)))
+
+        return min_dist
 
     def _detect_faces_in_crops(
         self, image_rgb: np.ndarray, persons: list[PersonDetection]

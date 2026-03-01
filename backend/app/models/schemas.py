@@ -31,6 +31,7 @@ class PairwiseFeatures(BaseModel):
     dominance_gap: float
     engagement_score: float
     balance_index: float
+    contact_score: float = 0.0  # 0 = no contact, 1 = wrists very close / likely touching
 
 
 class InteractionSummary(BaseModel):

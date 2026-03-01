@@ -27,6 +27,7 @@ export interface PairwiseFeatures {
   dominance_gap: number;
   engagement_score: number;
   balance_index: number;
+  contact_score: number;
 }
 
 export interface VoiceThought {

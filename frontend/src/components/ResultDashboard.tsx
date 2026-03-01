@@ -108,6 +108,7 @@ export default function ResultDashboard({ result }: Props) {
           <ScoreBar label="Closeness" value={pairwise.closeness_score} color="#4caf50" />
           <ScoreBar label="Emotion Similarity" value={pairwise.emotion_similarity} color="#ff9800" />
           <ScoreBar label="Balance" value={pairwise.balance_index} color="#2196f3" />
+          <ScoreBar label="Physical Contact" value={pairwise.contact_score} color="#f44336" />
           <div style={{ fontSize: "0.85rem", marginTop: 8, color: "var(--text-secondary)" }}>
             Mutual gaze: <strong>{pairwise.mutual_gaze ? "Yes" : "No"}</strong>
           </div>
