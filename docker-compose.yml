@@ -1,0 +1,26 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/audio_output:/app/audio_output
+      - ./backend/weights:/app/weights
+      - torch_cache:/root/.cache/torch/hub           # ✨ NEW: Persist PyTorch models
+      - mediapipe_cache:/root/.mediapipe             # ✨ NEW: Persist MediaPipe models
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  torch_cache:                                        # ✨ NEW: Named volume
+  mediapipe_cache:                                   # ✨ NEW: Named volume

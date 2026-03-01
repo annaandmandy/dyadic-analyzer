@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: dyadic-analyzer
+Version: 1.0.0
+Summary: Dyadic Visual Social Signal Analyzer - Perceived interaction signal analysis
+Requires-Python: >=3.11
+Requires-Dist: fastapi==0.115.6
+Requires-Dist: uvicorn[standard]==0.34.0
+Requires-Dist: pydantic==2.10.4
+Requires-Dist: pydantic-settings==2.7.1
+Requires-Dist: python-multipart==0.0.20
+Requires-Dist: sqlalchemy==2.0.36
+Requires-Dist: opencv-python-headless==4.10.0.84
+Requires-Dist: mediapipe==0.10.21
+Requires-Dist: numpy==1.26.4
+Requires-Dist: scipy==1.15.1
+Requires-Dist: scikit-learn==1.6.1
+Requires-Dist: torch==2.5.1
+Requires-Dist: torchvision==0.20.1
+Requires-Dist: timm==1.0.14
+Requires-Dist: openai==1.59.5
+Requires-Dist: httpx==0.28.1
+Requires-Dist: pillow==11.1.0
+Requires-Dist: ultralytics>=8.3.0

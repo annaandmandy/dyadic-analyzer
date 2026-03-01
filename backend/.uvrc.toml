@@ -1,0 +1,8 @@
+# uv runtime configuration
+# https://docs.astral.sh/uv/configuration/
+
+# Use the Python version specified in the project
+python-preference = "only-managed"
+
+# Ensure reproducible installs
+allow-insecure = false
