@@ -104,7 +104,7 @@ class VoiceSimulator:
                 with open(filepath, "wb") as f:
                     f.write(response.content)
 
-                return f"/audio/{filename}"
+                return f"/api/audio/{filename}"
         except Exception:
             return None
 
